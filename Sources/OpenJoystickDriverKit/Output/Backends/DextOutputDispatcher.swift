@@ -590,6 +590,9 @@ public final class DextOutputDispatcher: OutputDispatcher, @unchecked Sendable {
       // Dual encode: set D-pad button bits 11–14 alongside the hat switch.
       let dpadMask: UInt32 = 0xF << 11  // bits 11-14
       buttons = (buttons & ~dpadMask) | GamepadHIDDescriptor.dpadButtonBits(for: hat)
+    case .gyroSteeringChanged(let steerX):
+      // Gyro overrides physical left stick X axis
+      leftStickX = steerX
     }
   }
 

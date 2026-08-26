@@ -31,6 +31,13 @@ private enum DS4ConnectionMode {
 /// transport/control prefix.
 public final class DS4Parser: InputParser, PhysicalHIDRumbleOutput, @unchecked Sendable {
 
+  /// Gyro axis to use for steering (left-right tilt).
+  public enum GyroAxis: Sendable {
+    case pitch  // Gyro X — forward/back tilt
+    case yaw    // Gyro Y — left/right twist (default for steering wheel motion)
+    case roll   // Gyro Z — side-to-side banking
+  }
+
   private enum ReportOffset {
     static let leftStickX: Int = 0
     static let leftStickY: Int = 1
@@ -41,6 +48,15 @@ public final class DS4Parser: InputParser, PhysicalHIDRumbleOutput, @unchecked S
     static let buttons2: Int = 6
     static let l2Trigger: Int = 7
     static let r2Trigger: Int = 8
+    // Gyro/accelerometer offsets (after reportPayload stripping, same for USB and BT)
+    static let timestamp: Int = 9     // UInt16 LE (BT only, 5.33μs units)
+    static let temperature: Int = 11  // UInt8 (BT only)
+    static let gyroX: Int = 12        // Int16 LE — pitch
+    static let gyroY: Int = 14        // Int16 LE — yaw
+    static let gyroZ: Int = 16        // Int16 LE — roll
+    static let accelX: Int = 18       // Int16 LE
+    static let accelY: Int = 20       // Int16 LE
+    static let accelZ: Int = 22       // Int16 LE
   }
 
   private var prevFace: UInt8 = 0
@@ -54,6 +70,15 @@ public final class DS4Parser: InputParser, PhysicalHIDRumbleOutput, @unchecked S
   private var prevRSX = UInt8(ds4AxisCenter)
   private var prevRSY = UInt8(ds4AxisCenter)
   private var connectionMode: DS4ConnectionMode = .usb
+
+  // MARK: - Gyro steering state
+
+  /// Which gyro axis maps to steering. Default is `.yaw` (left/right twist).
+  public var steeringAxis: GyroAxis = .yaw
+  /// When true, gyro data overrides the physical left stick X axis.
+  public var gyroSteeringEnabled: Bool = true
+
+  private let gyroToSteering = GyroToSteering()
 
   /// Creates a new DS4Parser.
   public init(prefersBluetooth: Bool = false) {
@@ -108,6 +133,12 @@ public final class DS4Parser: InputParser, PhysicalHIDRumbleOutput, @unchecked S
     prevRSX = rsxRaw
     prevRSY = rsyRaw
 
+    // Parse gyro/accelerometer data when available (BT reports ≥ 24 bytes after stripping)
+    if gyroSteeringEnabled, bytes.count >= 24 {
+      let gyroEvents = parseGyro(bytes: bytes)
+      events.append(contentsOf: gyroEvents)
+    }
+
     return events
   }
 
@@ -144,6 +175,7 @@ public final class DS4Parser: InputParser, PhysicalHIDRumbleOutput, @unchecked S
       if connectionMode != .bluetooth { connectionMode = .usb }
       return Array(bytes.dropFirst())
     }
+    // BT with HID transaction header + USB report ID (weird hybrid — treat as BT)
     if bytes.first == ds4BluetoothHIDInputTransaction,
       bytes.dropFirst().first == ds4USBInputReportID,
       bytes.count >= 12
@@ -151,6 +183,10 @@ public final class DS4Parser: InputParser, PhysicalHIDRumbleOutput, @unchecked S
       connectionMode = .bluetooth
       return Array(bytes.dropFirst(2))
     }
+    // BT with HID transaction header + BT report ID (full 79-byte frame)
+    // Strip: 0xA1 + 0x11 + 2 flags = 4 bytes from front, 4 bytes CRC from back
+    // Result: 71 bytes — sticks/buttons/triggers at same offsets as USB payload,
+    //         gyro/accel data available starting at ReportOffset.gyroX (12)
     if bytes.first == ds4BluetoothHIDInputTransaction,
       bytes.dropFirst().first == ds4BluetoothInputReportID,
       bytes.count >= 79
@@ -158,6 +194,8 @@ public final class DS4Parser: InputParser, PhysicalHIDRumbleOutput, @unchecked S
       connectionMode = .bluetooth
       return Array(bytes.dropFirst(4).dropLast(4))
     }
+    // BT report ID only (78 bytes)
+    // Strip: 0x11 + 2 flags = 3 bytes from front, 4 bytes CRC from back
     if bytes.first == ds4BluetoothInputReportID, bytes.count >= 78 {
       connectionMode = .bluetooth
       return Array(bytes.dropFirst(3).dropLast(4))
@@ -239,6 +277,50 @@ public final class DS4Parser: InputParser, PhysicalHIDRumbleOutput, @unchecked S
     )
     return (events, system)
   }
+
+  // MARK: - Gyro/accelerometer parsing
+
+  private func parseGyro(bytes: [UInt8]) -> [ControllerEvent] {
+    // Read raw 16-bit signed values (little-endian)
+    let gyroX = Int16(bytes[ReportOffset.gyroX]) | (Int16(bytes[ReportOffset.gyroX + 1]) << 8)
+    let gyroY = Int16(bytes[ReportOffset.gyroY]) | (Int16(bytes[ReportOffset.gyroY + 1]) << 8)
+    let gyroZ = Int16(bytes[ReportOffset.gyroZ]) | (Int16(bytes[ReportOffset.gyroZ + 1]) << 8)
+    let accelX = Int16(bytes[ReportOffset.accelX]) | (Int16(bytes[ReportOffset.accelX + 1]) << 8)
+    let accelY = Int16(bytes[ReportOffset.accelY]) | (Int16(bytes[ReportOffset.accelY + 1]) << 8)
+    let accelZ = Int16(bytes[ReportOffset.accelZ]) | (Int16(bytes[ReportOffset.accelZ + 1]) << 8)
+
+    // Compute timestamp delta for integration (BT timestamp in 5.33μs units)
+    var dt: Double = 0.001  // default 1ms if no timestamp
+    if bytes.count >= ReportOffset.timestamp + 2 {
+      let ts = UInt16(bytes[ReportOffset.timestamp]) | (UInt16(bytes[ReportOffset.timestamp + 1]) << 8)
+      if prevTimestamp != 0 {
+        var delta = Int(ts) - Int(prevTimestamp)
+        if delta < 0 { delta += 65536 }  // handle wraparound
+        dt = Double(delta) * 0.00000533
+      }
+      prevTimestamp = ts
+    }
+
+    // Select the configured steering axis
+    let rawGyro: Int16
+    switch steeringAxis {
+    case .pitch: rawGyro = gyroX
+    case .yaw: rawGyro = gyroY
+    case .roll: rawGyro = gyroZ
+    }
+
+    // Convert to stick value
+    let steerX = gyroToSteering.update(
+      gyroRaw: rawGyro,
+      accelY: accelY,
+      accelZ: accelZ,
+      dt: dt
+    )
+
+    return [.gyroSteeringChanged(steerX)]
+  }
+
+  private var prevTimestamp: UInt16 = 0
 
   private func normalizeHID(_ raw: UInt8) -> Float {
     let normalized = (Float(raw) - ds4AxisCenter) / ds4AxisCenter

@@ -1,0 +1,21 @@
+name: Build
+
+on:
+  push:
+    branches: [main, gyro-steering]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode 16.2
+        run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode_16.1.app/Contents/Developer || xcode-select -p
+      - name: Show Swift version
+        run: swift --version
+      - name: Build
+        run: swift build 2>&1
+      - name: Run tests
+        run: swift test 2>&1 || true

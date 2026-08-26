@@ -168,6 +168,8 @@ actor DevicePipeline {
       case .rightTriggerChanged(let v): currentInputState.rightTrigger = v
       case .dpadChanged(let direction):
         updateDpadButtons(direction)
+      case .gyroSteeringChanged:
+        break  // Gyro steering is handled by the output dispatchers directly
       }
     }
     snapshots.updateInputState(currentInputState)

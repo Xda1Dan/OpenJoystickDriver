@@ -297,6 +297,9 @@ public final class UserSpaceOutputDispatcher: OutputDispatcher, @unchecked Senda
       state.hat = hatValue(for: dir)
       let dpadMask: UInt32 = 0xF << 11
       state.buttons = (state.buttons & ~dpadMask) | GamepadHIDDescriptor.dpadButtonBits(for: state.hat)
+    case .gyroSteeringChanged(let steerX):
+      // Gyro overrides physical left stick X axis
+      state.leftStickX = steerX
     }
   }
 

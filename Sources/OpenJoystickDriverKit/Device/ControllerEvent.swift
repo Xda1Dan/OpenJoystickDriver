@@ -25,6 +25,12 @@ public enum ControllerEvent: Sendable, Equatable {
 
   /// The directional pad moved to a new position (or returned to center).
   case dpadChanged(DpadDirection)
+
+  // MARK: - Gyro steering
+
+  /// Gyroscope-based steering value (maps to left stick X).
+  /// Value is Int16 range (-32767...32767) representing full left/right tilt.
+  case gyroSteeringChanged(Int16)
 }
 
 /// A named button on a game controller.
