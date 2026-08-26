@@ -16,7 +16,7 @@ jobs:
       - name: Build
         run: swift build -v 2>&1
       - name: Build Intel slice (x86_64)
-        run: swift build --arch x86_64 -v 2>&1 || echo "Intel cross-build not available, skipping"
+        run: swift build --arch x86_64 -v 2>&1
       - name: Run tests
         run: swift test 2>&1 || true
       - name: Upload build artifact (ARM)
@@ -25,3 +25,9 @@ jobs:
         with:
           name: build-output-arm64
           path: .build/debug/
+      - name: Upload build artifact (Intel)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output-intel
+          path: .build/x86_64-apple-macosx/debug/
