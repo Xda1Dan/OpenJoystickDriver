@@ -8,11 +8,11 @@ on:
 
 jobs:
   build:
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - name: Show Swift version
-        run: swift --version; xcodebuild -version 2>&1 || true; ls /Applications/Xcode*.app 2>&1 | head -10
+        run: swift --version; xcodebuild -version 2>&1 || true; ls /Applications/Xcode*.app 2>&1 | head -20
       - name: Build
         run: swift build 2>&1
       - name: Run tests
