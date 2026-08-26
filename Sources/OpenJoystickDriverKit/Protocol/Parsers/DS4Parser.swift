@@ -285,7 +285,6 @@ public final class DS4Parser: InputParser, PhysicalHIDRumbleOutput, @unchecked S
     let gyroX = Int16(bytes[ReportOffset.gyroX]) | (Int16(bytes[ReportOffset.gyroX + 1]) << 8)
     let gyroY = Int16(bytes[ReportOffset.gyroY]) | (Int16(bytes[ReportOffset.gyroY + 1]) << 8)
     let gyroZ = Int16(bytes[ReportOffset.gyroZ]) | (Int16(bytes[ReportOffset.gyroZ + 1]) << 8)
-    let accelX = Int16(bytes[ReportOffset.accelX]) | (Int16(bytes[ReportOffset.accelX + 1]) << 8)
     let accelY = Int16(bytes[ReportOffset.accelY]) | (Int16(bytes[ReportOffset.accelY + 1]) << 8)
     let accelZ = Int16(bytes[ReportOffset.accelZ]) | (Int16(bytes[ReportOffset.accelZ + 1]) << 8)
 

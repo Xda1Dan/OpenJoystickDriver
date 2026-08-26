@@ -8,11 +8,14 @@ on:
 
 jobs:
   build:
-    runs-on: macos-15
+    strategy:
+      matrix:
+        os: [macos-13, macos-15]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - name: Show Swift version
-        run: swift --version; xcodebuild -version 2>&1 || true; ls /Applications/Xcode*.app 2>&1 | head -20
+        run: swift --version; xcodebuild -version 2>&1 || true; uname -m
       - name: Build
         run: swift build 2>&1
       - name: Run tests
@@ -21,5 +24,5 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: build-output
+          name: build-output-${{ matrix.os }}
           path: .build/debug/
