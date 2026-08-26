@@ -8,26 +8,30 @@ on:
 
 jobs:
   build:
-    runs-on: macos-15
+    strategy:
+      matrix:
+        include:
+          - os: macos-15
+            artifact: build-output-arm64
+          - os: macos-13
+            artifact: build-output-intel
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - name: Setup Swift (Intel runner)
+        if: matrix.os == 'macos-13'
+        uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: '6.0'
       - name: Show Swift version
         run: swift --version; xcodebuild -version 2>&1 || true; uname -m
       - name: Build
         run: swift build -v 2>&1
-      - name: Build Intel slice (x86_64)
-        run: swift build --arch x86_64 -v 2>&1
       - name: Run tests
         run: swift test 2>&1 || true
-      - name: Upload build artifact (ARM)
+      - name: Upload build artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: build-output-arm64
+          name: ${{ matrix.artifact }}
           path: .build/debug/
-      - name: Upload build artifact (Intel)
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-output-intel
-          path: .build/x86_64-apple-macosx/debug/
