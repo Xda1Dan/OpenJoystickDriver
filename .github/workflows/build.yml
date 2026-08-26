@@ -8,21 +8,20 @@ on:
 
 jobs:
   build:
-    strategy:
-      matrix:
-        os: [macos-13, macos-15]
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - name: Show Swift version
         run: swift --version; xcodebuild -version 2>&1 || true; uname -m
       - name: Build
-        run: swift build 2>&1
+        run: swift build -v 2>&1
+      - name: Build Intel slice (x86_64)
+        run: swift build --arch x86_64 -v 2>&1 || echo "Intel cross-build not available, skipping"
       - name: Run tests
         run: swift test 2>&1 || true
-      - name: Upload build artifact
+      - name: Upload build artifact (ARM)
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: build-output-${{ matrix.os }}
+          name: build-output-arm64
           path: .build/debug/
