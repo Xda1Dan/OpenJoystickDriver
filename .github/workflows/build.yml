@@ -11,11 +11,15 @@ jobs:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
-      - name: Select Xcode 16.2
-        run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode_16.1.app/Contents/Developer || xcode-select -p
       - name: Show Swift version
-        run: swift --version
+        run: swift --version; xcodebuild -version 2>&1 || true; ls /Applications/Xcode*.app 2>&1 | head -10
       - name: Build
         run: swift build 2>&1
       - name: Run tests
         run: swift test 2>&1 || true
+      - name: Upload build artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: .build/debug/
